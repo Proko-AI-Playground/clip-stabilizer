@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Clip Stabilizer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="panel">
+        <h1>Clip Stabilizer</h1>
+        <p class="description">
+            Place the playhead on an edit point between two clips.
+        </p>
+
+        <div class="main-action">
+            <button id="btn-load" class="btn-primary">Load Edit</button>
+        </div>
+
+        <div id="preview-area" class="preview-area hidden">
+            <p class="preview-hint">Optional: draw a box to focus feature detection (e.g. exclude moving objects). Precision uses the full frame.</p>
+            <div class="preview-container">
+                <canvas id="preview-canvas"></canvas>
+            </div>
+            <div class="preview-actions">
+                <button id="btn-clear-roi" class="btn-secondary">Clear Selection</button>
+                <button id="btn-stabilize" class="btn-primary">Stabilize</button>
+            </div>
+        </div>
+
+        <div id="status-area" class="status-area hidden">
+            <div class="status-header">
+                <span id="status-icon" class="spinner"></span>
+                <span id="status-text">Processing...</span>
+            </div>
+            <div id="status-detail" class="status-detail"></div>
+        </div>
+
+        <div id="result-area" class="result-area hidden">
+            <h2>Applied to Clip 2</h2>
+            <div class="result-grid">
+                <div class="result-item">
+                    <label>Position X</label>
+                    <span id="result-pos-x">-</span>
+                </div>
+                <div class="result-item">
+                    <label>Position Y</label>
+                    <span id="result-pos-y">-</span>
+                </div>
+                <div class="result-item">
+                    <label>Rotation</label>
+                    <span id="result-rotation">-</span>
+                </div>
+                <div class="result-item">
+                    <label>Matched Features</label>
+                    <span id="result-matches">-</span>
+                </div>
+            </div>
+            <button id="btn-undo" class="btn-secondary">Undo</button>
+        </div>
+
+        <div id="error-area" class="error-area hidden">
+            <span id="error-text"></span>
+        </div>
+
+        <div class="settings-section">
+            <h2>Settings</h2>
+            <div class="setting-row">
+                <label for="search-radius">Search Radius (px)</label>
+                <input type="number" id="search-radius" value="100" min="20" max="300" step="10">
+            </div>
+            <div class="setting-row">
+                <label for="ffmpeg-path">FFmpeg Path</label>
+                <input type="text" id="ffmpeg-path" value="ffmpeg" placeholder="ffmpeg or full path">
+            </div>
+        </div>
+    </div>
+
+    <canvas id="canvas1" style="display:none;"></canvas>
+    <canvas id="canvas2" style="display:none;"></canvas>
+
+    <script src="CSInterface.js"></script>
+    <script src="imageProcessor.js"></script>
+    <script src="main.js"></script>
+</body>
+</html>
