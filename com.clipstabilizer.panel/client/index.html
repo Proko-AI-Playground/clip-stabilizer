@@ -13,16 +13,7 @@
         </p>
 
         <div class="main-action">
-            <button id="btn-load" class="btn-primary">Load Edit</button>
-        </div>
-
-        <div id="preview-area" class="preview-area hidden">
-            <div class="preview-container">
-                <canvas id="preview-canvas"></canvas>
-            </div>
-            <div class="preview-actions">
-                <button id="btn-stabilize" class="btn-primary">Stabilize</button>
-            </div>
+            <button id="btn-stabilize" class="btn-primary">Stabilize</button>
         </div>
 
         <div id="status-area" class="status-area hidden">
@@ -51,6 +42,29 @@
                 <div class="result-item">
                     <label>Matched Features</label>
                     <span id="result-matches">-</span>
+                </div>
+            </div>
+            <div class="nudge-section">
+                <h2>Fine Tune</h2>
+                <div class="nudge-row">
+                    <label>Position</label>
+                    <div class="nudge-controls">
+                        <button class="btn-nudge" data-prop="pos" data-axis="y" data-dir="-1" title="Up">&#9650;</button>
+                        <div class="nudge-horizontal">
+                            <button class="btn-nudge" data-prop="pos" data-axis="x" data-dir="-1" title="Left">&#9664;</button>
+                            <button class="btn-nudge" data-prop="pos" data-axis="x" data-dir="1" title="Right">&#9654;</button>
+                        </div>
+                        <button class="btn-nudge" data-prop="pos" data-axis="y" data-dir="1" title="Down">&#9660;</button>
+                    </div>
+                    <span class="nudge-step">0.5 px</span>
+                </div>
+                <div class="nudge-row">
+                    <label>Rotation</label>
+                    <div class="nudge-controls nudge-controls-row">
+                        <button class="btn-nudge" data-prop="rot" data-dir="-1" title="CCW">&#8634;</button>
+                        <button class="btn-nudge" data-prop="rot" data-dir="1" title="CW">&#8635;</button>
+                    </div>
+                    <span class="nudge-step">0.05°</span>
                 </div>
             </div>
             <button id="btn-undo" class="btn-secondary">Undo</button>

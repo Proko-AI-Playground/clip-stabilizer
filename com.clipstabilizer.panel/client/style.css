@@ -171,6 +171,74 @@ h2 {
     font-family: "Consolas", "Courier New", monospace;
 }
 
+/* Nudge controls */
+.nudge-section {
+    border-top: 1px solid #3a3a3a;
+    padding-top: 10px;
+    margin-bottom: 12px;
+}
+
+.nudge-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.nudge-row > label {
+    font-size: 11px;
+    color: #888;
+    width: 55px;
+    flex-shrink: 0;
+}
+
+.nudge-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.nudge-controls-row {
+    flex-direction: row;
+    gap: 4px;
+}
+
+.nudge-horizontal {
+    display: flex;
+    gap: 4px;
+}
+
+.btn-nudge {
+    width: 28px;
+    height: 24px;
+    padding: 0;
+    background-color: #3a3a3a;
+    color: #ccc;
+    border: 1px solid #555;
+    border-radius: 3px;
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.1s;
+}
+
+.btn-nudge:hover {
+    background-color: #4a4a4a;
+    color: #fff;
+}
+
+.btn-nudge:active {
+    background-color: #3d9ae8;
+}
+
+.nudge-step {
+    font-size: 10px;
+    color: #666;
+}
+
 /* Selectable text areas (errors, status, results) */
 .error-area,
 .status-detail,
@@ -189,44 +257,6 @@ h2 {
     line-height: 1.5;
     word-break: break-word;
     white-space: pre-wrap;
-}
-
-/* Preview */
-.preview-area {
-    background-color: #1a1a1a;
-    border: 1px solid #3a3a3a;
-    border-radius: 4px;
-    padding: 10px;
-}
-
-.preview-hint {
-    color: #999;
-    font-size: 11px;
-    margin-bottom: 8px;
-    line-height: 1.4;
-}
-
-.preview-container {
-    position: relative;
-    width: 100%;
-    background-color: #000;
-    border-radius: 3px;
-    overflow: hidden;
-    margin-bottom: 8px;
-}
-
-.preview-container canvas {
-    display: block;
-    width: 100%;
-}
-
-.preview-actions {
-    display: flex;
-    gap: 8px;
-}
-
-.preview-actions .btn-primary {
-    flex: 1;
 }
 
 /* Settings */

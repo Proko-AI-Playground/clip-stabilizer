@@ -746,25 +746,22 @@ var ImageProcessor = (function() {
         var estTy = p0BestTy;
 
         // ==== PHASE 1: Coarse joint rotation+translation at HALF resolution ====
-        // For each rotation angle, compute expected NCC offset from estT,
-        // then search a ±4px range around it.
-        // KEY: use FLOAT offsets (computeRotatedNCC handles sub-pixel via bilinear)
         var bestJointScore = -Infinity;
         var bestJointRot = 0;
         var bestJointTx = 0;
         var bestJointTy = 0;
 
-        for (var dr = -5.0; dr <= 5.0; dr += 0.25) {
+        for (var dr = -5.0; dr <= 5.0; dr += 0.5) {
             var expected = ransacToNccOffset(estTx, estTy, dr, w, h);
-            var halfExpTx = expected.x / 2; // FLOAT, not rounded
+            var halfExpTx = expected.x / 2;
             var halfExpTy = expected.y / 2;
 
-            for (var dty = -4; dty <= 4; dty++) {
-                for (var dtx = -4; dtx <= 4; dtx++) {
+            for (var dty = -3; dty <= 3; dty++) {
+                for (var dtx = -3; dtx <= 3; dtx++) {
                     var s = computeRotatedNCC(halfGray1, halfGray2, halfW, halfH,
                         hrx, hry, hrw, hrh,
                         halfExpTx + dtx, halfExpTy + dty, dr,
-                        true, 2);
+                        true, 3);
                     if (s > bestJointScore) {
                         bestJointScore = s;
                         bestJointRot = dr;
@@ -808,49 +805,33 @@ var ImageProcessor = (function() {
 
         var bestTxScore = -Infinity;
         var bestTx = fullBaseTx, bestTy = fullBaseTy;
-        var txScores = {};
         for (var dty = -10; dty <= 10; dty++) {
             for (var dtx = -10; dtx <= 10; dtx++) {
                 var s = computeRotatedNCC(fullGray1, fullGray2, w, h,
-                    rx, ry, rw, rh, fullBaseTx + dtx, fullBaseTy + dty, bestRot, false);
-                txScores[dtx + ',' + dty] = s;
+                    rx, ry, rw, rh, fullBaseTx + dtx, fullBaseTy + dty, bestRot, false, 2);
                 if (s > bestTxScore) { bestTxScore = s; bestTx = fullBaseTx + dtx; bestTy = fullBaseTy + dty; }
             }
         }
-        // Sub-pixel parabolic
-        var pkx = bestTx - fullBaseTx, pky = bestTy - fullBaseTy;
-        var sxm = txScores[(pkx - 1) + ',' + pky], sxp = txScores[(pkx + 1) + ',' + pky];
-        var sym = txScores[pkx + ',' + (pky - 1)], syp = txScores[pkx + ',' + (pky + 1)];
-        var subTx = 0, subTy = 0;
-        if (sxm !== undefined && sxp !== undefined) {
-            var d = 2 * (sxm + sxp - 2 * bestTxScore);
-            if (Math.abs(d) > 1e-10) subTx = Math.max(-0.5, Math.min(0.5, (sxm - sxp) / d));
-        }
-        if (sym !== undefined && syp !== undefined) {
-            var d = 2 * (sym + syp - 2 * bestTxScore);
-            if (Math.abs(d) > 1e-10) subTy = Math.max(-0.5, Math.min(0.5, (sym - syp) / d));
-        }
 
-        // ==== PHASE 4: Final rotation polish at full res ====
-        var finalTx = bestTx + subTx;
-        var finalTy = bestTy + subTy;
+        // ==== PHASE 4: Final rotation polish at full res (±0.4°, step=2) ====
+        var finalTx = bestTx;
+        var finalTy = bestTy;
         var polishRotScores = {};
         var polishBestScore = -Infinity;
         var polishBestRot = bestRot;
-        for (var dr = -0.15; dr <= 0.15; dr += 0.005) {
+        for (var dr = -0.4; dr <= 0.4; dr += 0.005) {
             var a = bestRot + dr;
             var key = Math.round(dr / 0.005);
             var s = computeRotatedNCC(fullGray1, fullGray2, w, h,
-                rx, ry, rw, rh, Math.round(finalTx), Math.round(finalTy), a, true, 1);
+                rx, ry, rw, rh, Math.round(finalTx), Math.round(finalTy), a, true, 2);
             polishRotScores[key] = s;
             if (s > polishBestScore) { polishBestScore = s; polishBestRot = a; }
         }
         var polishRotKey = Math.round((polishBestRot - bestRot) / 0.005);
         polishBestRot += parabolicPeak(polishRotScores, polishRotKey) * 0.005;
 
-        // ==== PHASE 5: Final translation touch-up after rotation polish ====
-        // Phase 4 may have shifted optimal rotation, which changes the optimal NCC offset.
-        // Do a small ±3px search at the polished rotation to correct any residual translation error.
+        // ==== PHASE 5: Final translation — multi-scale sub-pixel search ====
+        // Step 1: ±3px at 1px steps (coarse)
         var finalRot = polishBestRot;
         var p5BaseTx = Math.round(finalTx);
         var p5BaseTy = Math.round(finalTy);
@@ -863,30 +844,34 @@ var ImageProcessor = (function() {
                 if (s > p5BestScore) { p5BestScore = s; p5BestTx = p5BaseTx + dtx; p5BestTy = p5BaseTy + dty; }
             }
         }
-        // Sub-pixel for Phase 5
-        var p5SubTx = 0, p5SubTy = 0;
-        var p5dxKey = (p5BestTx - p5BaseTx);
-        var p5dyKey = (p5BestTy - p5BaseTy);
-        // Recompute neighbors for sub-pixel (reuse p5 search results would be ideal but simplicity wins)
-        var p5Sc = p5BestScore;
-        var p5Sxm = computeRotatedNCC(fullGray1, fullGray2, w, h, rx, ry, rw, rh, p5BestTx - 1, p5BestTy, finalRot, false);
-        var p5Sxp = computeRotatedNCC(fullGray1, fullGray2, w, h, rx, ry, rw, rh, p5BestTx + 1, p5BestTy, finalRot, false);
-        var p5Sym = computeRotatedNCC(fullGray1, fullGray2, w, h, rx, ry, rw, rh, p5BestTx, p5BestTy - 1, finalRot, false);
-        var p5Syp = computeRotatedNCC(fullGray1, fullGray2, w, h, rx, ry, rw, rh, p5BestTx, p5BestTy + 1, finalRot, false);
-        var p5d;
-        p5d = 2 * (p5Sxm + p5Sxp - 2 * p5Sc);
-        if (Math.abs(p5d) > 1e-10) p5SubTx = Math.max(-0.5, Math.min(0.5, (p5Sxm - p5Sxp) / p5d));
-        p5d = 2 * (p5Sym + p5Syp - 2 * p5Sc);
-        if (Math.abs(p5d) > 1e-10) p5SubTy = Math.max(-0.5, Math.min(0.5, (p5Sym - p5Syp) / p5d));
 
-        // Return NCC offset directly (rotation around frame center model).
-        // When anchor point = frame center (Premiere default), this directly gives
-        // the correct position adjustment: pos2 ≈ pos1 - nccOff * scale
+        // Step 2: ±1px at 0.25px steps around coarse winner (step=3 for speed)
+        var p5MidScore = -Infinity;
+        var p5MidTx = p5BestTx, p5MidTy = p5BestTy;
+        for (var dty = -1.0; dty <= 1.0; dty += 0.25) {
+            for (var dtx = -1.0; dtx <= 1.0; dtx += 0.25) {
+                var s = computeRotatedNCC(fullGray1, fullGray2, w, h,
+                    rx, ry, rw, rh, p5BestTx + dtx, p5BestTy + dty, finalRot, false, 3);
+                if (s > p5MidScore) { p5MidScore = s; p5MidTx = p5BestTx + dtx; p5MidTy = p5BestTy + dty; }
+            }
+        }
+
+        // Step 3: ±0.2px at 0.05px steps around mid winner (step=2 for precision)
+        var p5FineScore = -Infinity;
+        var p5FineTx = p5MidTx, p5FineTy = p5MidTy;
+        for (var dty = -0.2; dty <= 0.2; dty += 0.05) {
+            for (var dtx = -0.2; dtx <= 0.2; dtx += 0.05) {
+                var s = computeRotatedNCC(fullGray1, fullGray2, w, h,
+                    rx, ry, rw, rh, p5MidTx + dtx, p5MidTy + dty, finalRot, false, 2);
+                if (s > p5FineScore) { p5FineScore = s; p5FineTx = p5MidTx + dtx; p5FineTy = p5MidTy + dty; }
+            }
+        }
+
         return {
-            tx: p5BestTx + p5SubTx,
-            ty: p5BestTy + p5SubTy,
+            tx: p5FineTx,
+            ty: p5FineTy,
             rotation: finalRot,
-            confidence: p5BestScore
+            confidence: p5FineScore
         };
     }
 

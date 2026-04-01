@@ -247,6 +247,57 @@ function applyCorrection(srcOffsetX, srcOffsetY, srcRotation, sourceWidth) {
 }
 
 /**
+ * Nudge clip 2's position or rotation by a small delta.
+ * @param {string} prop - 'pos' or 'rot'
+ * @param {number} dx - delta X (for pos) or delta degrees (for rot)
+ * @param {number} dy - delta Y (for pos), ignored for rot
+ */
+function nudgeClip2(prop, dx, dy) {
+    try {
+        var seq = app.project.activeSequence;
+        if (!seq) return JSON.stringify({ error: 'no active sequence' });
+
+        var track = seq.videoTracks[$.global.stab_trackIdx];
+        var clip2 = track.clips[$.global.stab_clip2Idx];
+        var motion2 = getMotionComponent(clip2);
+        if (!motion2) return JSON.stringify({ error: 'Motion component not found' });
+
+        if (prop === 'pos') {
+            var posProp = getMotionProp(motion2, 'Position');
+            var pos = posProp.getValue();
+            var seqW = seq.frameSizeHorizontal;
+            var seqH = seq.frameSizeVertical;
+            var posIsNormalized = (pos[0] <= 2.0 && pos[1] <= 2.0);
+
+            var newX, newY;
+            if (posIsNormalized) {
+                newX = pos[0] + dx / seqW;
+                newY = pos[1] + dy / seqH;
+            } else {
+                newX = pos[0] + dx;
+                newY = pos[1] + dy;
+            }
+            posProp.setValue([newX, newY], true);
+
+            var displayX = posIsNormalized ? newX * seqW : newX;
+            var displayY = posIsNormalized ? newY * seqH : newY;
+            return JSON.stringify({ success: true, posX: displayX, posY: displayY });
+
+        } else if (prop === 'rot') {
+            var rotProp = getMotionProp(motion2, 'Rotation');
+            var rot = rotProp.getValue();
+            var newRot = rot + dx;
+            rotProp.setValue(newRot, true);
+            return JSON.stringify({ success: true, rotation: newRot });
+        }
+
+        return JSON.stringify({ error: 'unknown prop: ' + prop });
+    } catch (e) {
+        return JSON.stringify({ error: e.message + ' (line ' + e.line + ')' });
+    }
+}
+
+/**
  * Undo: restore clip 2's original position and rotation.
  */
 function undoCorrection() {
