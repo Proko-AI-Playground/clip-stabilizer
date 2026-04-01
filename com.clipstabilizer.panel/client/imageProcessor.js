@@ -191,20 +191,14 @@ var ImageProcessor = (function() {
         return sum / len;
     }
 
-    // ---- Feature Matching ----
-    function matchFeatures(gray1, w1, h1, corners1, gray2, w2, h2, corners2, searchRadius) {
+    // ---- Feature Matching (one direction) ----
+    function matchFeaturesOneWay(gray1, w1, h1, corners1, patches1, gray2, w2, h2, corners2, patches2, searchRadius) {
         var matches = [];
         var maxCorners = Math.min(corners1.length, 400);
 
-        // Pre-extract patches for corners2
-        var patches2 = [];
-        for (var j = 0; j < corners2.length; j++) {
-            patches2[j] = extractPatch(gray2, w2, h2, corners2[j].x, corners2[j].y);
-        }
-
         for (var i = 0; i < maxCorners; i++) {
             var c1 = corners1[i];
-            var patch1 = extractPatch(gray1, w1, h1, c1.x, c1.y);
+            var patch1 = patches1[i];
 
             var bestScore = -1;
             var secondBestScore = -1;
@@ -227,9 +221,10 @@ var ImageProcessor = (function() {
             }
 
             // Ratio test: best match must be significantly better
-            if (bestIdx >= 0 && bestScore > 0.6) {
+            if (bestIdx >= 0 && bestScore > 0.7) {
                 if (secondBestScore < 0 || bestScore > secondBestScore * 1.3) {
                     matches.push({
+                        idx1: i, idx2: bestIdx,
                         x1: c1.x, y1: c1.y,
                         x2: corners2[bestIdx].x, y2: corners2[bestIdx].y,
                         score: bestScore
@@ -239,6 +234,45 @@ var ImageProcessor = (function() {
         }
 
         return matches;
+    }
+
+    // ---- Feature Matching with Forward-Backward Consistency ----
+    function matchFeatures(gray1, w1, h1, corners1, gray2, w2, h2, corners2, searchRadius) {
+        // Pre-extract all patches
+        var patches1 = [];
+        for (var i = 0; i < corners1.length; i++) {
+            patches1[i] = extractPatch(gray1, w1, h1, corners1[i].x, corners1[i].y);
+        }
+        var patches2 = [];
+        for (var j = 0; j < corners2.length; j++) {
+            patches2[j] = extractPatch(gray2, w2, h2, corners2[j].x, corners2[j].y);
+        }
+
+        // Forward: 1 -> 2
+        var forward = matchFeaturesOneWay(gray1, w1, h1, corners1, patches1, gray2, w2, h2, corners2, patches2, searchRadius);
+        // Backward: 2 -> 1
+        var backward = matchFeaturesOneWay(gray2, w2, h2, corners2, patches2, gray1, w1, h1, corners1, patches1, searchRadius);
+
+        // Build reverse lookup: for each corner2 index, which corner1 index did backward pick?
+        var backwardMap = {};
+        for (var k = 0; k < backward.length; k++) {
+            backwardMap[backward[k].idx1] = backward[k].idx2;  // idx1 is in corners2, idx2 is in corners1
+        }
+
+        // Keep only consistent matches: forward(i)=j AND backward(j)=i
+        var consistent = [];
+        for (var k = 0; k < forward.length; k++) {
+            var fwd = forward[k];
+            if (backwardMap[fwd.idx2] === fwd.idx1) {
+                consistent.push({
+                    x1: fwd.x1, y1: fwd.y1,
+                    x2: fwd.x2, y2: fwd.y2,
+                    score: fwd.score
+                });
+            }
+        }
+
+        return consistent;
     }
 
     // ---- Similarity Transform Estimation ----
@@ -385,23 +419,8 @@ var ImageProcessor = (function() {
         return bestModel;
     }
 
-    // ---- Filter corners to ROI ----
-    function filterCornersToROI(corners, roi) {
-        if (!roi) return corners;
-        var filtered = [];
-        for (var i = 0; i < corners.length; i++) {
-            var c = corners[i];
-            if (c.x >= roi.x && c.x < roi.x + roi.w &&
-                c.y >= roi.y && c.y < roi.y + roi.h) {
-                filtered.push(c);
-            }
-        }
-        return filtered;
-    }
-
     // ---- Main Comparison ----
-    // roi: { x, y, w, h } in original image pixels, or null for full frame
-    function compare(canvas1, canvas2, searchRadius, roi) {
+    function compare(canvas1, canvas2, searchRadius) {
         searchRadius = searchRadius || 100;
 
         // Get image dimensions
@@ -412,17 +431,6 @@ var ImageProcessor = (function() {
         var workW = Math.round(w1 / scaleDown);
         var workH = Math.round(h1 / scaleDown);
         var scaledSearchRadius = Math.round(searchRadius / scaleDown);
-
-        // Scale ROI to working resolution
-        var scaledROI = null;
-        if (roi) {
-            scaledROI = {
-                x: Math.round(roi.x / scaleDown),
-                y: Math.round(roi.y / scaleDown),
-                w: Math.round(roi.w / scaleDown),
-                h: Math.round(roi.h / scaleDown)
-            };
-        }
 
         // Resize to working resolution
         var workCanvas1 = document.createElement('canvas');
@@ -454,9 +462,6 @@ var ImageProcessor = (function() {
 
         corners1 = nonMaxSuppression(corners1, workW, workH, 8);
         corners2 = nonMaxSuppression(corners2, workW, workH, 8);
-
-        // Filter corners1 to ROI only (corners2 stays full for matching)
-        corners1 = filterCornersToROI(corners1, scaledROI);
 
         // Limit corners
         if (corners1.length > 500) corners1 = corners1.slice(0, 500);

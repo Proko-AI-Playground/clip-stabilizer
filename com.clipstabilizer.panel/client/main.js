@@ -1,6 +1,6 @@
 /**
  * Main controller for Clip Stabilizer CEP extension.
- * Flow: Load Edit -> Preview frame + draw ROI -> Stabilize
+ * Flow: Load Edit -> Preview frame -> Stabilize
  */
 
 (function() {
@@ -15,7 +15,6 @@
     // UI Elements
     var btnLoad = document.getElementById('btn-load');
     var btnStabilize = document.getElementById('btn-stabilize');
-    var btnClearRoi = document.getElementById('btn-clear-roi');
     var btnUndo = document.getElementById('btn-undo');
     var previewArea = document.getElementById('preview-area');
     var previewCanvas = document.getElementById('preview-canvas');
@@ -34,8 +33,6 @@
     var editInfo = null;           // Stored info from getEditPointInfo
     var previewImage = null;       // Image object for frame 1
     var previewScale = 1;          // Scale from original to preview size
-    var roi = null;                // { x, y, w, h } in ORIGINAL image pixels
-    var roiDraw = null;            // In-progress drawing state
     var lastAppliedCorrection = null;
 
     // ---- Helpers ----
@@ -132,7 +129,7 @@
         canvas.getContext('2d').drawImage(img, 0, 0);
     }
 
-    // ---- Preview & ROI Drawing ----
+    // ---- Preview ----
 
     function renderPreview() {
         if (!previewImage) return;
@@ -144,93 +141,7 @@
         previewCanvas.height = Math.round(previewImage.height * previewScale);
 
         previewCtx.drawImage(previewImage, 0, 0, previewCanvas.width, previewCanvas.height);
-
-        // Draw ROI if exists
-        if (roi) {
-            drawRoiRect(roi.x * previewScale, roi.y * previewScale,
-                        roi.w * previewScale, roi.h * previewScale);
-        }
     }
-
-    function drawRoiRect(x, y, w, h) {
-        previewCtx.strokeStyle = '#3d9ae8';
-        previewCtx.lineWidth = 2;
-        previewCtx.setLineDash([6, 3]);
-        previewCtx.strokeRect(x, y, w, h);
-        previewCtx.setLineDash([]);
-
-        // Semi-transparent fill
-        previewCtx.fillStyle = 'rgba(61, 154, 232, 0.1)';
-        previewCtx.fillRect(x, y, w, h);
-    }
-
-    function getCanvasPos(e) {
-        var rect = previewCanvas.getBoundingClientRect();
-        return {
-            x: e.clientX - rect.left,
-            y: e.clientY - rect.top
-        };
-    }
-
-    previewCanvas.addEventListener('mousedown', function(e) {
-        var pos = getCanvasPos(e);
-        roiDraw = { startX: pos.x, startY: pos.y };
-        roi = null;
-    });
-
-    previewCanvas.addEventListener('mousemove', function(e) {
-        if (!roiDraw) return;
-        var pos = getCanvasPos(e);
-
-        // Redraw preview + current selection
-        renderPreview();
-        var x = Math.min(roiDraw.startX, pos.x);
-        var y = Math.min(roiDraw.startY, pos.y);
-        var w = Math.abs(pos.x - roiDraw.startX);
-        var h = Math.abs(pos.y - roiDraw.startY);
-        drawRoiRect(x, y, w, h);
-    });
-
-    previewCanvas.addEventListener('mouseup', function(e) {
-        if (!roiDraw) return;
-        var pos = getCanvasPos(e);
-
-        var x = Math.min(roiDraw.startX, pos.x);
-        var y = Math.min(roiDraw.startY, pos.y);
-        var w = Math.abs(pos.x - roiDraw.startX);
-        var h = Math.abs(pos.y - roiDraw.startY);
-
-        roiDraw = null;
-
-        // Minimum size check (at least 20px in preview)
-        if (w < 20 || h < 20) {
-            roi = null;
-            renderPreview();
-            return;
-        }
-
-        // Convert to original image coordinates
-        roi = {
-            x: Math.round(x / previewScale),
-            y: Math.round(y / previewScale),
-            w: Math.round(w / previewScale),
-            h: Math.round(h / previewScale)
-        };
-
-        renderPreview();
-    });
-
-    previewCanvas.addEventListener('mouseleave', function() {
-        if (roiDraw) {
-            roiDraw = null;
-            renderPreview();
-        }
-    });
-
-    btnClearRoi.addEventListener('click', function() {
-        roi = null;
-        renderPreview();
-    });
 
     // ---- Step 1: Load Edit ----
 
@@ -239,7 +150,6 @@
         previewArea.classList.add('hidden');
         resultArea.classList.add('hidden');
         errorArea.classList.add('hidden');
-        roi = null;
         lastAppliedCorrection = null;
 
         try {
@@ -296,20 +206,18 @@
         btnLoad.disabled = false;
     }
 
-    // ---- Step 2: Stabilize with ROI ----
+    // ---- Step 2: Stabilize ----
 
     async function stabilize() {
         btnStabilize.disabled = true;
 
         try {
-            setStatus('Comparing frames...', roi
-                ? 'Feature region: ' + roi.w + 'x' + roi.h + 'px (refinement uses full frame)'
-                : 'Using full frame');
+            setStatus('Comparing frames...', 'Using full frame');
 
             await new Promise(function(resolve) { setTimeout(resolve, 50); });
 
             var searchRadius = parseInt(document.getElementById('search-radius').value) || 100;
-            var result = ImageProcessor.compare(canvas1, canvas2, searchRadius, roi);
+            var result = ImageProcessor.compare(canvas1, canvas2, searchRadius);
 
             if (result.error) {
                 throw new Error(result.error);
